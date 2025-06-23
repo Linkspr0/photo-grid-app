@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo to Word Document Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: 30px auto;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #0056b3;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        input[type="file"] {
+            display: block;
+            margin-top: 5px;
+        }
+        select, input[type="number"], input[type="range"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+            margin-top: 5px;
+        }
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px dashed #ccc;
+            background-color: #fafafa;
+            min-height: 100px;
+            align-items: start; /* Align items to the start of their grid areas */
+        }
+        .preview-item {
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #fff;
+            text-align: center;
+            position: relative;
+        }
+        .preview-item img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin-bottom: 10px;
+        }
+        .preview-item .file-name {
+            font-size: 0.85em;
+            color: #666;
+            word-break: break-all; /* Break long filenames */
+        }
+        .preview-item input[type="text"] {
+            width: calc(100% - 16px); /* Adjust for padding */
+            padding: 8px;
+            margin-top: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1.1em;
+            margin-top: 20px;
+            width: 100%;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .info-text {
+            font-size: 0.9em;
+            color: #777;
+            margin-top: 5px;
+        }
+        #includeCaptionsContainer {
+            display: flex;
+            align-items: center;
+            margin-top: 15px;
+        }
+        #includeCaptionsContainer label {
+            margin-bottom: 0;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Generate Photo Report</h1>
+
+        <form action="/generate-document" method="post" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="photos">Select Photos:</label>
+                <input type="file" id="photos" name="photos" accept="image/*" multiple required>
+                <div class="info-text">Select one or more image files (e.g., JPG, PNG).</div>
+            </div>
+
+            <div class="form-group">
+                <label for="image_quality">Image Quality:</label>
+                <select id="image_quality" name="image_quality">
+                    <option value="print" selected>Print (220 ppi)</option>
+                    <option value="hd">HD (330 ppi)</option>
+                    <option value="web">Web (150 ppi)</option>
+                    <option value="email">E-mail (96 ppi)</option>
+                    <option value="original">Preserve Original Quality</option>
+                </select>
+                <div class="info-text">Higher PPI means better quality but larger file size.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="num_columns">Number of Columns:</label>
+                <input type="number" id="num_columns" name="num_columns" min="1" max="4" value="2" required>
+                <div class="info-text">How many columns of photos in the document (1 to 4).</div>
+            </div>
+
+            <div class="form-group">
+                <label for="whitespace_mm">Whitespace around photos (mm):</label>
+                <input type="number" id="whitespace_mm" name="whitespace_mm" min="0" step="1" value="5" required>
+                <div class="info-text">Padding/spacing around each photo cell in millimeters.</div>
+            </div>
+
+            <div class="form-group" id="includeCaptionsContainer">
+                <input type="checkbox" id="include_captions" name="include_captions" checked>
+                <label for="include_captions">Include text captions under photos</label>
+            </div>
+
+            <div class="form-group">
+                <label>Photo Preview & Captions:</label>
+                <div id="photo-preview-grid" class="preview-grid">
+                    <p id="no-photos-message" style="text-align: center; color: #999;">No photos selected yet.</p>
+                </div>
+            </div>
+
+            <button type="submit">Generate Word Document (HTML)</button>
+        </form>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const photosInput = document.getElementById('photos');
+        const photoPreviewGrid = document.getElementById('photo-preview-grid');
+        const noPhotosMessage = document.getElementById('no-photos-message');
+        const includeCaptionsCheckbox = document.getElementById('include_captions');
+
+        let files = []; // Store selected files globally
+
+        photosInput.addEventListener('change', function(event) {
+            photoPreviewGrid.innerHTML = ''; // Clear previous previews
+            files = Array.from(event.target.files); // Convert FileList to Array
+
+            if (files.length === 0) {
+                noPhotosMessage.style.display = 'block';
+                return;
+            } else {
+                noPhotosMessage.style.display = 'none';
+            }
+
+            // --- NIEUWE LOGICA VOOR SEQUENTIËLE VERWERKING ---
+            let fileIndex = 0; // Houd bij welk bestand we nu verwerken
+
+            function processNextFile() {
+                if (fileIndex < files.length) {
+                    const file = files[fileIndex];
+                    const reader = new FileReader();
+
+                    reader.onload = function(e) {
+                        const previewItem = document.createElement('div');
+                        previewItem.className = 'preview-item';
+
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.alt = `Preview of ${file.name}`;
+                        previewItem.appendChild(img);
+
+                        const fileName = document.createElement('div');
+                        fileName.className = 'file-name';
+                        fileName.textContent = file.name;
+                        previewItem.appendChild(fileName);
+
+                        const captionInput = document.createElement('input');
+                        captionInput.type = 'text';
+                        captionInput.name = `caption[]`;
+                        captionInput.placeholder = 'Voer bijschrift in (optioneel)'; // Aangepaste placeholder tekst
+                        captionInput.style.display = includeCaptionsCheckbox.checked ? 'block' : 'none';
+                        previewItem.appendChild(captionInput);
+
+                        photoPreviewGrid.appendChild(previewItem);
+
+                        fileIndex++; // Ga naar het volgende bestand
+                        processNextFile(); // Verwerk het volgende bestand
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+
+            processNextFile(); // Start het proces voor het eerste bestand
+            // --- EINDE NIEUWE LOGICA ---
+        });
+
+        // Toggle caption input visibility (deze blijft hetzelfde)
+        includeCaptionsCheckbox.addEventListener('change', function() {
+            const captionInputs = photoPreviewGrid.querySelectorAll('input[name="caption[]"]');
+            captionInputs.forEach(input => {
+                input.style.display = this.checked ? 'block' : 'none';
+            });
+        });
+
+        // Form submission logic blijft hetzelfde, want de file input regelt dit direct
+        document.querySelector('form').addEventListener('submit', function(e) {
+            // No changes needed here.
+        });
+    });
+</script>
+</body>
+</html>
