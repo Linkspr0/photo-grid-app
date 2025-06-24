@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fotoreportage Generator</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 600px; margin: auto; }
+        h1 { text-align: center; color: #333; }
+        form div { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="file"] { border: 1px solid #ddd; padding: 8px; border-radius: 4px; display: block; width: 100%; box-sizing: border-box; }
+        input[type="number"], input[type="text"], select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        input[type="checkbox"] { margin-right: 5px; }
+        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; width: 100%; }
+        button:hover { background-color: #0056b3; }
+        .caption-input { margin-top: 10px; padding: 5px; border: 1px solid #eee; border-radius: 4px; }
+        .photo-upload-section { border: 1px dashed #ccc; padding: 15px; border-radius: 5px; background-color: #f9f9f9; }
+        .photo-preview { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
+        .photo-preview-item { border: 1px solid #ddd; padding: 5px; border-radius: 5px; text-align: center; width: calc(33% - 10px); box-sizing: border-box; }
+        .photo-preview-item img { max-width: 100px; max-height: 100px; display: block; margin: 0 auto 5px auto; }
+        .add-more-photos { text-align: center; margin-top: 10px; }
+        .add-more-photos button { background-color: #28a745; width: auto; padding: 8px 12px; font-size: 14px; }
+        .add-more-photos button:hover { background-color: #218838; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Fotoreportage Generator</h1>
+        <form action="/generate-document" method="post" enctype="multipart/form-data">
+
+            <div class="photo-upload-section">
+                <label for="photos">Selecteer Foto's:</label>
+                <input type="file" id="photos" name="photos" accept="image/*" multiple onchange="previewPhotos(event)">
+                <div id="photo-previews" class="photo-preview"></div>
+                <div class="add-more-photos">
+                    <button type="button" onclick="addPhotoInput()">Voeg meer foto's toe</button>
+                </div>
+            </div>
+
+            <div>
+                <label for="num_columns">Aantal Kolommen:</label>
+                <input type="number" id="num_columns" name="num_columns" value="2" min="1" max="4">
+            </div>
+
+            <div>
+                <label for="whitespace_mm">Witruimte tussen foto's (mm):</label>
+                <input type="number" id="whitespace_mm" name="whitespace_mm" value="5" min="0" step="0.5">
+            </div>
+
+            <div>
+                <label for="image_quality">Afbeeldingskwaliteit:</label>
+                <select id="image_quality" name="image_quality">
+                    <option value="print" selected>Print (220 PPI)</option>
+                    <option value="hd">HD (330 PPI)</option>
+                    <option value="web">Web (150 PPI)</option>
+                    <option value="email">E-mail (96 PPI)</option>
+                    <option value="original">Origineel (max. 330 PPI)</option>
+                </select>
+            </div>
+
+            <div>
+                <input type="checkbox" id="include_captions" name="include_captions" onchange="toggleCaptions()">
+                <label for="include_captions">Bijschriften toevoegen</label>
+            </div>
+
+            <div id="caption-container" style="display:none;">
+                </div>
+
+            <button type="submit">Genereer Word Document</button>
+        </form>
+    </div>
+
+    <script>
+        let photoCounter = 0; // Om unieke IDs te genereren voor bijschriften
+
+        function addPhotoInput() {
+            const photoUploadSection = document.querySelector('.photo-upload-section');
+            const newFileInput = document.createElement('input');
+            newFileInput.type = 'file';
+            newFileInput.name = 'photos';
+            newFileInput.accept = 'image/*';
+            newFileInput.multiple = true;
+            newFileInput.onchange = previewPhotos;
+            photoUploadSection.insertBefore(newFileInput, document.getElementById('photo-previews').parentNode.nextSibling);
+        }
+
+        function previewPhotos(event) {
+            const previewContainer = document.getElementById('photo-previews');
+            const captionContainer = document.getElementById('caption-container');
+            const files = event.target.files;
+
+            for (const file of files) {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const previewItem = document.createElement('div');
+                        previewItem.className = 'photo-preview-item';
+
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        previewItem.appendChild(img);
+
+                        const fileName = document.createElement('p');
+                        fileName.textContent = file.name;
+                        fileName.style.fontSize = '0.8em';
+                        fileName.style.wordBreak = 'break-all';
+                        previewItem.appendChild(fileName);
+
+                        previewContainer.appendChild(previewItem);
+
+                        // Voeg bijschriftveld toe als de optie is aangevinkt
+                        if (document.getElementById('include_captions').checked) {
+                            addCaptionField(photoCounter);
+                        }
+                        photoCounter++;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+        }
+
+        function toggleCaptions() {
+            const captionContainer = document.getElementById('caption-container');
+            const includeCaptionsCheckbox = document.getElementById('include_captions');
+
+            if (includeCaptionsCheckbox.checked) {
+                captionContainer.style.display = 'block';
+                // Voeg bijschriftvelden toe voor reeds geselecteerde foto's
+                const currentPhotosCount = document.querySelectorAll('#photo-previews img').length;
+                // Voorkom dubbele bijschriftvelden als er al foto's zijn geselecteerd
+                if (captionContainer.children.length < currentPhotosCount) {
+                    for (let i = captionContainer.children.length; i < currentPhotosCount; i++) {
+                        addCaptionField(i); // Gebruik de index als een unieke ID
+                    }
+                }
+            } else {
+                captionContainer.style.display = 'none';
+                captionContainer.innerHTML = ''; // Leeg de bijschriftvelden
+            }
+        }
+
+        function addCaptionField(index) {
+            const captionContainer = document.getElementById('caption-container');
+            const captionDiv = document.createElement('div');
+            captionDiv.className = 'caption-input';
+
+            const label = document.createElement('label');
+            label.textContent = `Bijschrift voor foto ${index + 1}:`;
+            captionDiv.appendChild(label);
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.name = 'caption[]';
+            input.placeholder = `Voer bijschrift in voor foto ${index + 1}`;
+            captionDiv.appendChild(input);
+
+            captionContainer.appendChild(captionDiv);
+        }
+    </script>
+</body>
+</html>
